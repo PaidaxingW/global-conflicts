@@ -1710,6 +1710,54 @@ function reinit(){
   plotMarkers();
 }
 
+// === 实时市场数据轮询 (60秒) ===
+let marketPollTimer = null;
+async function pollMarkets() {
+  try {
+    const resp = await fetch('/api/markets');
+    if (!resp.ok) return;
+    const json = await resp.json();
+    if (!json.markets) return;
+    const yf = json.markets;
+    const mkt = yf.indexes || [];
+    const cry = yf.crypto || [];
+    const rates = yf.rates || [];
+    const commodities = yf.commodities || [];
+    const vixQ = (yf.volatility || [])[0];
+    const goldQ = (commodities || []).find(c => c.symbol === 'GC=F');
+    const silverQ = (commodities || []).find(c => c.symbol === 'SI=F');
+    const wtiQ = (commodities || []).find(c => c.symbol === 'CL=F');
+    const brentQ = (commodities || []).find(c => c.symbol === 'BZ=F');
+    const natgasQ = (commodities || []).find(c => c.symbol === 'NG=F');
+    // Update D.markets
+    if (D.markets) {
+      D.markets.indexes = mkt.map(q => ({symbol:q.symbol,name:q.name,price:q.price,change:q.change,changePct:q.changePct,history:q.history||[]}));
+      D.markets.crypto = cry.map(q => ({symbol:q.symbol,name:q.name,price:q.price,change:q.change,changePct:q.changePct}));
+      D.markets.rates = rates.map(q => ({symbol:q.symbol,name:q.name,price:q.price,change:q.change,changePct:q.changePct}));
+      D.markets.commodities = commodities.map(q => ({symbol:q.symbol,name:q.name,price:q.price,change:q.change,changePct:q.changePct,history:q.history||[]}));
+      if (vixQ) D.markets.vix = {value:vixQ.price,change:vixQ.change,changePct:vixQ.changePct};
+      D.markets.timestamp = json.timestamp;
+    }
+    // Update D.energy with live prices
+    if (wtiQ?.price) D.energy.wti = wtiQ.price;
+    if (brentQ?.price) D.energy.brent = brentQ.price;
+    if (natgasQ?.price) D.energy.natgas = natgasQ.price;
+    // Update metals
+    if (D.metals) {
+      if (goldQ) { D.metals.gold = goldQ.price; D.metals.goldChange = goldQ.change; D.metals.goldChangePct = goldQ.changePct; if (goldQ.history) D.metals.goldRecent = goldQ.history.map(h=>h.close); }
+      if (silverQ) { D.metals.silver = silverQ.price; D.metals.silverChange = silverQ.change; D.metals.silverChangePct = silverQ.changePct; if (silverQ.history) D.metals.silverRecent = silverQ.history.map(h=>h.close); }
+    }
+    // Re-render left rail (macros + market cards)
+    renderLeftRail();
+    renderLower();
+  } catch(e) { console.warn('市场数据轮询失败:', e); }
+}
+function startMarketPoll() {
+  if (marketPollTimer) clearInterval(marketPollTimer);
+  pollMarkets();
+  marketPollTimer = setInterval(pollMarkets, 60000);
+}
+
 // === SSE: Live Updates from Server ===
 function connectSSE(){
   if (typeof EventSource === 'undefined') return;
@@ -1748,6 +1796,7 @@ function init(){
   renderTopbar();renderLeftRail();renderLower();renderRight();
   renderGlossary();
   initMap();
+  startMarketPoll(); // 实时市场数据轮询
   if (!booted) { runBoot(); booted = true; }
   // Close popup on click outside markers
   document.getElementById('mapContainer').addEventListener('click',e=>{
@@ -1785,6 +1834,70 @@ document.addEventListener('DOMContentLoaded', () => {
     init();
   }
 });
+</script>
+<script>
+// === 自动翻译：新闻标题和Telegram情报 ===
+(async function(){
+  const TRANSLATED_KEY = '__crucix_zh_translated';
+  const CACHE_TTL = 30 * 60 * 1000; // 30分钟缓存
+  let cache = {};
+  try { cache = JSON.parse(localStorage.getItem(TRANSLATED_KEY) || '{}'); } catch(e){}
+  const now = Date.now();
+  // 清理过期缓存
+  Object.keys(cache).forEach(k => { if (now - cache[k].t > CACHE_TTL) delete cache[k]; });
+
+  async function translateText(text) {
+    if (!text || text.length < 5) return text;
+    const key = text.slice(0, 200);
+    if (cache[key]) return cache[key].v;
+    try {
+      const resp = await fetch('https://translate.googleapis.com/translate_a/single?client=gtx&sl=en&tl=zh-CN&dt=t&q=' + encodeURIComponent(text.slice(0, 500)));
+      const data = await resp.json();
+      let translated = '';
+      if (data && data[0]) {
+        data[0].forEach(s => { if (s[0]) translated += s[0]; });
+      }
+      if (translated) {
+        cache[key] = { v: translated, t: now };
+        localStorage.setItem(TRANSLATED_KEY, JSON.stringify(cache));
+        return translated;
+      }
+    } catch(e) { console.warn('翻译失败:', e); }
+    return text;
+  }
+
+  async function translateElements() {
+    // 翻译新闻标题
+    document.querySelectorAll('.news-title').forEach(async el => {
+      const orig = el.textContent;
+      const zh = await translateText(orig);
+      if (zh !== orig) el.textContent = zh;
+    });
+    // 翻译 Telegram 情报文本
+    document.querySelectorAll('.tg-text, .intel-text, .feed-headline').forEach(async el => {
+      const orig = el.textContent;
+      const zh = await translateText(orig);
+      if (zh !== orig) el.textContent = zh;
+    });
+  }
+
+  // 等DOM渲染完成
+  setTimeout(translateElements, 2000);
+  // 数据刷新后再次翻译
+  const observer = new MutationObserver(mutations => {
+    mutations.forEach(m => {
+      m.addedNodes.forEach(n => {
+        if (n.nodeType === 1 && (n.classList?.contains('news-title') || n.querySelector?.('.news-title'))) {
+          translateElements();
+        }
+      });
+    });
+  });
+  setTimeout(() => {
+    const container = document.querySelector('#newsFeed') || document.body;
+    observer.observe(container, { childList: true, subtree: true });
+  }, 3000);
+})();
 </script>
 </body>
 </html>

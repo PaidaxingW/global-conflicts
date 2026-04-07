@@ -10,6 +10,7 @@ import { exec } from 'child_process';
 import config from './crucix.config.mjs';
 import { getLocale, currentLanguage, getSupportedLocales } from './lib/i18n.mjs';
 import { fullBriefing } from './apis/briefing.mjs';
+import { collect as fetchMarketData } from './apis/sources/yfinance.mjs';
 import { synthesize, generateIdeas } from './dashboard/inject.mjs';
 import { MemoryManager } from './lib/delta/index.mjs';
 import { createLLMProvider } from './lib/llm/index.mjs';
@@ -257,6 +258,16 @@ app.get('/', (req, res) => {
 app.get('/api/data', (req, res) => {
   if (!currentData) return res.status(503).json({ error: 'No data yet — first sweep in progress' });
   res.json(currentData);
+});
+
+// API: live market data only (lightweight, for real-time polling)
+app.get('/api/markets', async (req, res) => {
+  try {
+    const yf = await fetchMarketData();
+    res.json({ markets: yf, timestamp: new Date().toISOString() });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
 });
 
 // API: health check
