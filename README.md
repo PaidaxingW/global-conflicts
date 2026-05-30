@@ -4,7 +4,7 @@
 
 **Your own intelligence terminal. 27 sources. One command. Zero cloud.**
 
-## [Visit The Live Site: 全球冲突](https://https://www.quanqiuchongtu.com/,)
+## [Visit The Live Site: 全球冲突](https://https://www.quanqiuchongtu.com)
 
 [![Live Website](https://img.shields.io/badge/live-crucix.live-00d4ff?style=for-the-badge)](https://www.crucix.live/)
 [![Open Demo](https://img.shields.io/badge/open-live%20dashboard-0b1220?style=for-the-badge&logo=googlechrome&logoColor=white)](https://www.crucix.live/)
@@ -37,7 +37,7 @@
 
 </div>
 
-> **Live website:** [全球冲突中文站](https://www.quanqiuchongtu.com/,)
+> **Live website:** [全球冲突中文站](https://www.quanqiuchongtu.com)
 > Explore the public demo first, then clone the repo to run Crucix locally.
 
 Crucix pulls satellite fire detection, flight tracking, radiation monitoring, satellite constellation tracking, economic indicators, live market prices, conflict data, sanctions lists, and social sentiment from 27 open-source intelligence feeds — in parallel, every 15 minutes — and renders everything on a single self-contained Jarvis-style dashboard.
